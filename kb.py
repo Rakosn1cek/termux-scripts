@@ -2,16 +2,23 @@
 import argparse
 import json
 import os
-import sys
+import subprocess
 from datetime import datetime
+import tempfile
+import sys
 
-# --- Configuration ---
+# --- Configuration & Paths ---
 DB_FILE = os.path.expanduser("~/.kb_data.json")
+
+# Define the user's preferred editor (defaults to nano if EDITOR is not set)
+EDITOR = os.environ.get('EDITOR', 'nano')
+
 # Colors for Termux
 CYAN = '\033[96m'
 GREEN = '\033[92m'
 YELLOW = '\033[93m'
 RED = '\033[91m'
+BOLD = '\033[1m'
 RESET = '\033[0m'
 
 # --- Database Handling ---
@@ -25,30 +32,99 @@ def load_db():
         return []
 
 def save_db(data):
+    # Ensure all integers are saved as integers (especially 'id')
+    for item in data:
+        if 'id' in item:
+            item['id'] = int(item['id'])
     with open(DB_FILE, 'w') as f:
         json.dump(data, f, indent=4)
 
 # --- Helper: Print Note ---
-def print_note(note):
-    print(f"{CYAN}ID: {note['id']} | {note['date']}{RESET}")
-    print(f"{GREEN}Title: {note['title']}{RESET}")
-    if note['content']:
-        print(f"Content: {note['content']}")
-    if note['tags']:
+def print_note(note, full_content=False):
+    print(f"\n{BOLD}{CYAN}┌──────────────────────────────────────────────┐{RESET}")
+    print(f"│ {BOLD}ID: {note['id']} | {note['date']} {RESET:<28}│")
+    print(f"│ {GREEN}Title: {note['title']}{RESET:<35}│")
+    print(f"{CYAN}└──────────────────────────────────────────────┘{RESET}")
+    if note.get('tags'):
         print(f"{YELLOW}Tags: {', '.join(note['tags'])}{RESET}")
-    print("-" * 30)
+    
+    # Display full content for view command or search
+    if note.get('content'):
+        print(f"\n{BOLD}CONTENT:{RESET}")
+        if full_content:
+            print(note['content'])
+        else:
+             # Truncate content for search/list preview
+            content_preview = note['content'][:150] + '...' if len(note['content']) > 150 else note['content']
+            print(content_preview)
+    print("-" * 50)
 
-# --- Commands ---
+
+# --- New Command: View ---
+def view_note(args):
+    db = load_db()
+    note = next((n for n in db if n['id'] == args.id), None)
+    
+    if note:
+        print_note(note, full_content=True)
+    else:
+        print(f"{RED}Error: Note with ID {args.id} not found.{RESET}")
+
+# --- New Command: Edit ---
+def edit_note(args):
+    db = load_db()
+    
+    # 1. Find the note
+    try:
+        index = next(i for i, n in enumerate(db) if n['id'] == args.id)
+        note = db[index]
+    except StopIteration:
+        print(f"{RED}Error: Note with ID {args.id} not found.{RESET}")
+        return
+
+    # 2. Use a temporary file to hold the content
+    with tempfile.NamedTemporaryFile(mode='w+', delete=False) as tmp:
+        # Write the content to be edited
+        tmp.write(note['content'])
+        tmp_path = tmp.name
+
+    # 3. Call the user's preferred editor
+    try:
+        print(f"{CYAN}Opening note content in {EDITOR}...{RESET}")
+        subprocess.run([EDITOR, tmp_path])
+    except FileNotFoundError:
+        print(f"{RED}Error: Editor '{EDITOR}' not found. Please check your $EDITOR environment variable.{RESET}")
+        os.remove(tmp_path)
+        return
+
+    # 4. Read the modified content back
+    with open(tmp_path, 'r') as tmp:
+        modified_content = tmp.read()
+
+    # 5. Update the database
+    if modified_content != note['content']:
+        note['content'] = modified_content
+        note['date'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S") # Update timestamp
+        save_db(db)
+        print(f"✅ {GREEN}Note ID {args.id} updated successfully.{RESET}")
+    else:
+        print("Note content unchanged.")
+        
+    # Clean up the temporary file
+    os.remove(tmp_path)
+
+
+# --- Existing Commands (Condensed) ---
 def add_note(args):
     db = load_db()
-    new_id = 1 if not db else db[-1]['id'] + 1
+    new_id = 1 if not db else max(n.get('id', 0) for n in db) + 1 # Robust ID generation
     
     new_note = {
         "id": new_id,
         "title": args.title,
         "content": args.content, 
         "tags": args.tags,       
-        "date": datetime.now().strftime("%Y-%m-%d %H:%M")
+        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }
     
     db.append(new_note)
@@ -61,28 +137,29 @@ def list_notes(args):
         print("No notes found.")
         return
     
-    print(f"\n{CYAN}--- All Notes ({len(db)}) ---{RESET}")
+    print(f"\n{BOLD}{CYAN}--- All Notes ({len(db)}) ---{RESET}")
     for note in db:
-        print(f"[{note['id']}] {note['title']} {YELLOW}({', '.join(note['tags'])}){RESET}")
+        print(f"[{note['id']}] {note['title']} {YELLOW}({', '.join(note.get('tags', []))}){RESET}")
 
 def search_notes(args):
     db = load_db()
     query = args.query.lower()
     found = False
     
-    print(f"\n{CYAN}--- Search Results for '{query}' ---{RESET}")
+    print(f"\n{BOLD}{CYAN}--- Search Results for '{query}' ---{RESET}")
     for note in db:
-        # Search in title, content, and tags
-        in_title = query in note['title'].lower()
-        in_content = query in note['content'].lower() if note['content'] else False
-        in_tags = any(query in tag.lower() for tag in note['tags'])
+        # Search logic remains the same
+        in_title = query in note.get('title', '').lower()
+        in_content = query in note.get('content', '').lower()
+        in_tags = any(query in tag.lower() for tag in note.get('tags', []))
         
         if in_title or in_content or in_tags:
-            print_note(note)
+            print_note(note, full_content=False)
             found = True
             
     if not found:
         print(f"{RED}No matches found.{RESET}")
+
 
 # --- Main CLI Setup ---
 def main():
@@ -94,22 +171,33 @@ def main():
     parser_add.add_argument("title", type=str, help="Title of the note")
     parser_add.add_argument("-c", "--content", type=str, help="Code snippet or body", default="")
     parser_add.add_argument("-t", "--tags", nargs="+", help="Tags", default=[])
+    parser_add.set_defaults(func=add_note)
 
     # 'list' command
     parser_list = subparsers.add_parser("list", help="List all notes")
+    parser_list.set_defaults(func=list_notes)
 
     # 'search' command
     parser_search = subparsers.add_parser("search", help="Search notes")
     parser_search.add_argument("query", type=str, help="Search term")
+    parser_search.set_defaults(func=search_notes)
+    
+    # 'view' command (NEW)
+    parser_view = subparsers.add_parser("view", help="View a specific note by ID")
+    parser_view.add_argument("id", type=int, help="ID of the note to view")
+    parser_view.set_defaults(func=view_note)
+    
+    # 'edit' command (NEW)
+    parser_edit = subparsers.add_parser("edit", help="Edit a note's content by ID")
+    parser_edit.add_argument("id", type=int, help="ID of the note to edit")
+    parser_edit.set_defaults(func=edit_note)
 
+
+    # Parse arguments and call function defined by set_defaults
     args = parser.parse_args()
 
-    if args.command == "add":
-        add_note(args)
-    elif args.command == "list":
-        list_notes(args)
-    elif args.command == "search":
-        search_notes(args)
+    if hasattr(args, 'func'):
+        args.func(args)
     else:
         parser.print_help()
 
