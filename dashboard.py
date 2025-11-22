@@ -4,7 +4,7 @@ import json
 import os
 import shutil
 from datetime import datetime
-VERSION= "1.0.0"
+VERSION= "1.1.0"
 
 # --- Configuration & Paths ---
 # Using the paths you provided earlier

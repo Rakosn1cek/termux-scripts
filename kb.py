@@ -6,7 +6,7 @@ import subprocess
 from datetime import datetime
 import tempfile
 import sys
-VERSION= "1.0.0"
+VERSION= "1.1.0"
 
 # --- Configuration & Paths ---
 DB_FILE = os.path.expanduser("~/.kb_data.json")
