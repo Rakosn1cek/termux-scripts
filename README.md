@@ -1,6 +1,6 @@
-# Termux Knowledge Base (KB) Utility
+# Termux Knowledge Base (KB) Utility v1.1.0
 
-A simple, command-line utility built in Python to save, search, and manage quick code snippets, technical notes, and helpful commands directly within the Termux terminal environment.
+A command-line utility built in Python to save, search, and manage quick code snippets and notes directly within the Termux terminal environment.
 
 ## 🚀 Setup and Installation
 
@@ -12,30 +12,36 @@ A simple, command-line utility built in Python to save, search, and manage quick
     alias kb="python3 ~/termux-scripts/kb.py"
     ```
 
-## ✨ Core Features
+## ✨ Core Features (v1.1.0)
 
 | Command | Description |
 | :--- | :--- |
 | `kb add` | Adds a new note with a title, content, and optional tags. |
-| `kb list` | Lists the IDs and titles of all stored notes. |
-| `kb search <query>` | Searches notes by title, content, or tags. |
+| `kb list` | Lists all notes. |
+| `kb list --tag <tag>` | **New:** Filters the list to show only notes with the specified tag. |
+| `kb search <query>` | Performs a general search across titles, content, and tags. |
+| `kb search <query> --tag` | **New:** Searches for the query exclusively within note tags. |
 | `kb view <ID>` | Displays a note's full content cleanly. |
-| `kb edit <ID>` | Opens the note's content in the user's `$EDITOR` (e.g., Nano/Vim) for quick modification. |
+| `kb edit <ID>` | Opens content in the user's `$EDITOR` (e.g., Nano/Vim) for modification. |
 | `kb delete <ID>` | Permanently deletes a note after confirmation. |
 | `kb tag add/remove` | Manages tags on an existing note. |
+| `kb --version` | Displays the current script version. |
 
 ## 💡 Usage Examples
 
 ```bash
-# 1. Add a quick note about a Termux path
-kb add "Termux Path Variable" -c "The home directory is /data/data/com.termux/files/home" -t termux path
+# 1. Add a new note with tags
+kb add "Fix Git Auth" -c "Use PAT instead of password when pushing on Termux." -t git termux
 
-# 2. View the full content of note ID 5
+# 2. List all notes with the tag 'git'
+kb list --tag git
+
+# 3. Search exclusively for the tag 'termux'
+kb search termux --tag
+
+# 4. View the full content of note ID 5
 kb view 5
 
-# 3. Add a tag to an existing note
-kb tag add 5 important
-
-# 4. Search the database for any entries containing 'termux'
-kb search termux
+# 5. Delete note ID 12
+kb delete 12
 
