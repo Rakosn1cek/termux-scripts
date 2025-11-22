@@ -160,9 +160,34 @@ def add_note(args):
 
 def list_notes(args):
     db = load_db()
-    if not db:
-        print("No notes found.")
+    
+    # 1. Start with the full database
+    filtered_db = db
+    
+    # 2. Apply filtering if a tag is provided
+    if args.tag:
+        tag_query = args.tag.lower()
+        # Filter notes where the tag_query is present in the note's tags list
+        filtered_db = [
+            note for note in db
+            if tag_query in [t.lower() for t in note.get('tags', [])]
+        ]
+        
+    if not filtered_db:
+        if args.tag:
+            print(f"{RED}No notes found with tag '{args.tag}'.{RESET}")
+        else:
+            print("No notes found.")
         return
+    
+    # 3. Print the results
+    tag_info = f" (Tag: {args.tag})" if args.tag else ""
+    print(f"\n{BOLD}{CYAN}--- Notes Found ({len(filtered_db)}){tag_info} ---{RESET}")
+    for note in filtered_db:
+        # Display note information cleanly
+        tags_str = f" ({', '.join(note.get('tags', []))})" if note.get('tags') else ""
+        print(f"[{note['id']}] {note['title']} {YELLOW}{tags_str}{RESET}")
+
     
     print(f"\n{BOLD}{CYAN}--- All Notes ({len(db)}) ---{RESET}")
     for note in db:
@@ -172,6 +197,33 @@ def search_notes(args):
     db = load_db()
     query = args.query.lower()
     found = False
+    
+    # Check if we should only search tags
+    tag_only_mode = args.tag_only
+    
+    print(f"\n{BOLD}{CYAN}--- Search Results for '{query}' ---{RESET}")
+    
+    for note in db:
+        # Check for tag match regardless of mode
+        in_tags = any(query in tag.lower() for tag in note.get('tags', []))
+        
+        if tag_only_mode:
+            # Mode 1: Only check tags
+            if in_tags:
+                print_note(note, full_content=False)
+                found = True
+        else:
+            # Mode 2: Check all fields (standard search)
+            in_title = query in note.get('title', '').lower()
+            in_content = query in note.get('content', '').lower()
+            
+            if in_title or in_content or in_tags:
+                print_note(note, full_content=False)
+                found = True
+            
+    if not found:
+        print(f"{RED}No matches found.{RESET}")
+
     
     print(f"\n{BOLD}{CYAN}--- Search Results for '{query}' ---{RESET}")
     for note in db:
@@ -207,12 +259,17 @@ def main():
 
     # 'list' command
     parser_list = subparsers.add_parser("list", help="List all notes")
+    parser_list.add_argument("-t", "--tag", type=str, help="Filter notes by a specific tag", default=None)
     parser_list.set_defaults(func=list_notes)
+
 
     # 'search' command
     parser_search = subparsers.add_parser("search", help="Search notes")
     parser_search.add_argument("query", type=str, help="Search term")
+    parser_search.add_argument("--tag", dest="tag_only", action="store_true", 
+                                help="Search tags exclusively, ignoring title and content.")
     parser_search.set_defaults(func=search_notes)
+
     
     # 'view' command (NEW)
     parser_view = subparsers.add_parser("view", help="View a specific note by ID")
