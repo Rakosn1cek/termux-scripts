@@ -6,6 +6,7 @@ import subprocess
 from datetime import datetime
 import tempfile
 import sys
+VERSION= "1.0.0"
 
 # --- Configuration & Paths ---
 DB_FILE = os.path.expanduser("~/.kb_data.json")
@@ -189,7 +190,12 @@ def search_notes(args):
 
 # --- Main CLI Setup ---
 def main():
-    parser = argparse.ArgumentParser(description="Termux Knowledge Base (kb)")
+    parser = argparse.ArgumentParser(
+    description="Termux Knowledge Base (kb)",
+    epilog=f"Version: v{VERSION}"
+)
+    parser.add_argument('--version', action='version', version=f'%(prog)s v{VERSION}')
+
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # 'add' command

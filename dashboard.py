@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 from datetime import datetime
+VERSION= "1.0.0"
 
 # --- Configuration & Paths ---
 # Using the paths you provided earlier
@@ -94,7 +95,7 @@ def main():
     print(f" 📝 Tasks:     {get_pending_tasks()}")
     print(f" 💸 Budget:    {get_todays_spending()}")
     print("")
-    print(f"{CYAN}Ready for command...{RESET}")
+    print(f"{CYAN}Ready for command... ({RESET}v{VERSION}{CYAN}){RESET}")
     print("")
 
 if __name__ == "__main__":

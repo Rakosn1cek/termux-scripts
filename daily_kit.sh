@@ -1,4 +1,11 @@
 #!/bin/bash
+VERSION="1.0.0"
+
+# Function to show version (add this near the top)
+show_version() {
+    echo "Daily Kit Version: v$VERSION"
+    exit 0
+}
 
 # --- 1. Shebang & Variables ---
 
@@ -23,6 +30,11 @@ BACKUP_TARGETS=(
     ".bashrc"         # Keep this in case you use Bash for non-interactive scripts
     # Add any other important dotfiles or scripts here!
 )
+
+# Check for version flag
+if [[ "$1" == "--version" ]]; then
+    show_version
+fi
 
 # --- 2. Logging Function ---
 log() {
