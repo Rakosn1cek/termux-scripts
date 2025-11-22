@@ -114,6 +114,32 @@ def edit_note(args):
     os.remove(tmp_path)
 
 
+# --- Command: Delete ---
+def delete_note(args):
+    db = load_db()
+
+    # 1. Find the note
+    try:
+        note = next(n for n in db if n['id'] == args.id)
+    except StopIteration:
+        print(f"{RED}Error: Note with ID {args.id} not found.{RESET}")
+        return
+
+    print(f"\n{YELLOW}--- CONFIRM DELETION ---{RESET}")
+    print(f"Are you sure you want to delete Note ID {note['id']} ({note['title']})?")
+
+    # 2. Ask for confirmation
+    confirm = input("Type 'yes' to confirm: ")
+
+    if confirm.lower() == 'yes':
+        # 3. Filter the note out of the list
+        new_db = [n for n in db if n['id'] != args.id]
+        save_db(new_db)
+        print(f"✅ {GREEN}Note ID {args.id} and content successfully DELETED.{RESET}")
+    else:
+        print(f"{CYAN}Deletion cancelled.{RESET}")
+
+
 # --- Existing Commands (Condensed) ---
 def add_note(args):
     db = load_db()
@@ -191,6 +217,11 @@ def main():
     parser_edit = subparsers.add_parser("edit", help="Edit a note's content by ID")
     parser_edit.add_argument("id", type=int, help="ID of the note to edit")
     parser_edit.set_defaults(func=edit_note)
+    
+    # 'delete' command (NEW)
+    parser_delete = subparsers.add_parser("delete", help="Delete a note by ID")
+    parser_delete.add_argument("id", type=int, help="ID of the note to delete")
+    parser_delete.set_defaults(func=delete_note)
 
 
     # Parse arguments and call function defined by set_defaults
