@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
+import os
 import sqlite3
 import json
-import os
 import shutil
+import subprocess
 from datetime import datetime
-VERSION= "1.1.0"
+VERSION= "1.1.1"
 
 # --- Configuration & Paths ---
 # Using the paths you provided earlier
@@ -72,9 +73,9 @@ def get_todays_spending():
         return f"{RED}DB Error (Check Schema){RESET}"
 
 def main():
-    os.system('clear')   # 1. Clear screen
-    os.system('neofetch') # 2. Run Neofetch cleanly
-    print("")            # 3. Add space
+    os.system('clear')
+    os.system('fastfetch --logo none') # <-- MODIFIED LINE
+    print("")
     
     # Header
     greeting = get_greeting()
@@ -82,8 +83,8 @@ def main():
     date_str = datetime.now().strftime("%A, %d %B %Y")
     
     print(f"{BOLD}{CYAN}┌──────────────────────────────────────────────┐{RESET}")
-    print(f"{BOLD}{CYAN}│ {greeting}, {user}!                       │{RESET}")
-    print(f"{BOLD}{CYAN}│ {date_str:<36}         │{RESET}")
+    print(f"{BOLD}{CYAN}│ {greeting}, {user}!                         │{RESET}")
+    print(f"{BOLD}{CYAN}│ {date_str:<36}         |{RESET}")
     print(f"{BOLD}{CYAN}└──────────────────────────────────────────────┘{RESET}")
     print("")
 
