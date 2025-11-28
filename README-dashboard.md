@@ -1,4 +1,4 @@
-# 🖥️ Termux Command Center Dashboard (`dashboard.py`) v1.1.0
+# 🖥️ Termux Command Center Dashboard (`dashboard.py`) v1.1.2
 A Python script that acts as the personalized "Message of the Day" (MotD) or **Heads-Up Display (HUD)** for your Termux environment. It runs automatically upon starting the shell to provide an immediate status overview.
 
 ## ✨ Core Features
@@ -7,7 +7,7 @@ A Python script that acts as the personalized "Message of the Day" (MotD) or **H
 * **Integrated Status:** Pulls data directly from the **Budget-Buddy** and **Rich Task Manager** and **Notes** databases to provide a live summary.
 * **Contextual Greeting:** Greets the user based on the time of day (Morning, Afternoon, Evening).
 * **Clean Startup:** Clears the screen and, optionally, runs `neofetch`/`fastfetch` for a professional, clean command center look.
-* **Version Tracking:** Displays the current script version (v1.1.0) <- Added display Notes function
+* **Version Tracking:** Displays the current script version (v1.1.2) <- Added display Notes function
 
 ## 🚀 Setup and Automation
 
