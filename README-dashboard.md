@@ -1,14 +1,13 @@
-# 🖥️ Termux Command Center Dashboard (`dashboard.py`)
-
+# 🖥️ Termux Command Center Dashboard (`dashboard.py`) v1.1.0
 A Python script that acts as the personalized "Message of the Day" (MotD) or **Heads-Up Display (HUD)** for your Termux environment. It runs automatically upon starting the shell to provide an immediate status overview.
 
 ## ✨ Core Features
 
 * **System Status:** Displays current disk space usage.
-* **Integrated Status:** Pulls data directly from the **Budget-Buddy** and **Rich Task Manager** databases to provide a live summary.
+* **Integrated Status:** Pulls data directly from the **Budget-Buddy** and **Rich Task Manager** and **Notes** databases to provide a live summary.
 * **Contextual Greeting:** Greets the user based on the time of day (Morning, Afternoon, Evening).
-* **Clean Startup:** Clears the screen and, optionally, runs `neofetch` for a professional, clean command center look.
-* **Version Tracking:** Displays the current script version (v1.0.0).
+* **Clean Startup:** Clears the screen and, optionally, runs `neofetch`/`fastfetch` for a professional, clean command center look.
+* **Version Tracking:** Displays the current script version (v1.1.0) <- Added display Notes function
 
 ## 🚀 Setup and Automation
 
@@ -37,4 +36,5 @@ The dashboard relies on finding the following files for status reports:
 | :--- | :--- | :--- |
 | **Budget Buddy** | `~/Budget-Buddy-TUI/expenses.db` | Today's total spending. |
 | **Rich Task Manager** | `~/rich-task-manager-tui/tasks.json` | Total number of pending tasks. |
+| **Notes** | `~/.notes_db.json` | Total number of notes and titles |
 

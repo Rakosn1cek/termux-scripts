@@ -11,6 +11,7 @@ VERSION= "1.1.1"
 # Using the paths you provided earlier
 BUDGET_DB = os.path.expanduser("~/Budget-Buddy-TUI/expenses.db")
 TASKS_JSON = os.path.expanduser("~/rich-task-manager-tui/tasks.json")
+NOTES_DB_FILE = os.path.expanduser("~/.notes_db.json")
 
 # Colors
 CYAN = '\033[96m'
@@ -72,6 +73,71 @@ def get_todays_spending():
     except Exception as e:
         return f"{RED}DB Error (Check Schema){RESET}"
 
+def get_note_stats():
+    """
+    Reads the notes database and returns summary statistics.
+    """
+    try:
+        if not os.path.exists(NOTES_DB_FILE):
+            return 0, 0, "N/A"
+
+        with open(NOTES_DB_FILE, 'r') as f:
+            notes = json.load(f)
+        
+        if not notes:
+            return 0, 0, "N/A"
+
+        total_notes = len(notes)
+        all_tags = set()
+        
+        # Sort notes by creation date (latest first)
+        # Assuming created_at is a string sortable by time (e.g., YYYY-MM-DD HH:MM:SS)
+        notes_sorted = sorted(notes, 
+                              key=lambda x: x.get('created_at', '1900-01-01'), 
+                              reverse=True)
+        
+        most_recent_title = notes_sorted[0].get('title', 'Untitled')
+
+        # Collect all tags
+        for note in notes:
+            if 'tags' in note and note['tags']:
+                for tag in note['tags']:
+                    all_tags.add(tag.lower())
+
+        unique_tags = len(all_tags)
+        
+        return total_notes, unique_tags, most_recent_title
+
+    except json.JSONDecodeError:
+        print(f"{RED}Warning: Notes database is corrupted.{RESET}", file=sys.stderr)
+        return 0, 0, "Corrupted DB"
+    except Exception as e:
+        # print(f"{RED}Error reading notes database: {e}{RESET}", file=sys.stderr)
+        return 0, 0, "Error"
+        
+def display_note_summary(width):
+    """
+    Displays a summary of the notes database.
+    """
+    total_notes, unique_tags, most_recent = get_note_stats()
+    
+    # Define the panel structure
+    lines = [
+        f"{BOLD}{CYAN}NOTES SUMMARY:{RESET}",
+        f"{YELLOW}Total Notes:{RESET} {total_notes}",
+        f"{YELLOW}Unique Tags:{RESET} {unique_tags}",
+        f"{YELLOW}Most Recent:{RESET} {most_recent}"
+    ]
+    
+    # Calculate padding and print the panel
+    box_width = len(max(lines, key=len)) + 4  # +4 for padding
+
+    print(f"\n{BOLD}{CYAN}╭{'─' * (box_width - 2)}╮{RESET}")
+    for line in lines:
+        padding_right = box_width - len(line) - 3
+        print(f"{CYAN}│{RESET} {line}{' ' * padding_right}{CYAN}│{RESET}")
+    print(f"{BOLD}{CYAN}╰{'─' * (box_width - 2)}╯{RESET}")
+    
 def main():
     os.system('clear')
     os.system('fastfetch --logo none') # <-- MODIFIED LINE
@@ -94,10 +160,12 @@ def main():
     print(f" -----------------")
     print(f" 💾 System:    {get_system_stats()}")
     print(f" 📝 Tasks:     {get_pending_tasks()}")
+    print(f" 📚 Notes:     {get_note_stats()}") # <-- NEW LINE ADDED HERE
     print(f" 💸 Budget:    {get_todays_spending()}")
     print("")
     print(f"{CYAN}Ready for command... ({RESET}v{VERSION}{CYAN}){RESET}")
     print("")
+
 
 if __name__ == "__main__":
     main()
