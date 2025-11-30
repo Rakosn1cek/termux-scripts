@@ -140,7 +140,7 @@ def display_note_summary(width):
     
 def main():
     os.system('clear')
-    os.system('fastfetch --logo none') # <-- MODIFIED LINE
+    
     print("")
     
     # Header

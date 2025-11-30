@@ -1,63 +1,53 @@
-🧠 Simple Note Taking App (note.py) v1.0.0
+Termux CLI Note Manager (note) v1.1.0
+A simple, fast, and robust command-line interface for managing notes directly within your Termux environment. This application uses Python to store and retrieve notes as sequential text files in a dedicated local directory, eliminating the need for cloud services or external dependencies.
+Features
+ * Zero Setup: No database, no API keys, just local files.
+ * Simple Management: Use commands like add, list, edit, view, and delete.
+ * Editor Integration: Uses your default $EDITOR (or nano) for editing.
+ * Pager Support: Uses less for viewing long notes without cluttering the terminal.
+🚀 Installation & Setup
+ * Ensure Python is installed:
+   pkg install python
 
-A lightweight, command-line utility for managing personal notes, quick thoughts, and code snippets directly from the terminal. It uses a simple JSON database (~/.notes_db.json) for persistence.
-✨ Features
- * Title & Description: Store key context (Title) and detailed content (Description).
- * Creation Date: Automatically tracks when each note was created.
- * Tagging: Organize notes using searchable tags (e.g., code, shopping, todo).
- * CRUD Operations: Full support for Create, Read (View/List), Update (Edit), and Delete.
- * Filtering: List notes by a specific tag.
- * Editor Integration: Uses your shell's $EDITOR (e.g., nano or vim) for clean editing.
-🚀 Setup
-1. File Location
-Ensure the note.py script is saved in a convenient location, such as your home directory:
-# Assuming you created the file in your home directory
-cd ~
-chmod +x note.py
+ * Save the Script: Place note.py in your executable scripts directory (e.g., ~/termux-scripts/):
+   mkdir -p ~/termux-scripts
+# [Copy the note.py file content here]
+chmod +x ~/termux-scripts/note.py
 
-2. Create an Alias (Recommended)
-To run the script easily by just typing note, add the following alias to your shell's configuration file (~/.zshrc or ~/.bashrc):
-nano ~/.zshrc
+ * Create the Storage Directory: Notes are stored here.
+   mkdir -p ~/notes
 
-Add this line:
-alias note="python3 ~/note.py"
+ * Create an Alias (Optional, but recommended for easy use):
+   Add the following line to your shell configuration file (e.g., ~/.zshrc or ~/.bashrc):
+   alias note='python ~/termux-scripts/note.py'
 
-Save and exit, then reload your shell configuration:
-source ~/.zshrc
+   Then run source ~/.zshrc (or .bashrc).
+📋 Usage
+The note script uses subcommands to perform actions.
+| Command | Action | Example |
+|---|---|---|
+| add | Creates a new note with the specified content. | note add "Review project proposal by Friday." |
+| list | Shows all notes with IDs, creation time, and a preview. | note list |
+| view | Shows the full content of a note using the less pager. | note view 3 |
+| edit | Opens the note in your default text editor (e.g., nano). | note edit 1 |
+| delete | Permanently deletes a note by ID. | note delete 2 |
+Example Workflow
+# 1. Add a note
+$ note add "Need to install Node.js and check the system path setup."
+✅ Note added successfully with ID: 1
 
-💡 Usage Examples
-All commands are executed using the alias note.
-1. Adding a Note (add)
-The title is the first argument, and the description (content) is passed using the -c or --content flag. Tags are optional.
-| Action | Command |
-|---|---|
-| Basic Add | note add "Daily Goals" -c "Finish report, call client, buy milk" |
-| With Tags | note add "Bash Script Trick" -c "Use 'set -e' for error checking." -t code bash cli |
-2. Listing Notes (list)
-List all notes or filter by a specific tag.
-| Action | Command |
-|---|---|
-| List All | note list |
-| Filter by Tag | note list --tag code |
-3. Viewing a Note (view)
-View the full content and metadata for a specific note ID.
-| Action | Command |
-|---|---|
-| View Note | note view 5 |
-4. Editing a Note (edit)
-Opens the note's content in your terminal editor (nano or vim).
-| Action | Command |
-|---|---|
-| Edit Content | note edit 5 |
-5. Managing Tags (tag add, tag remove)
-Add or remove tags from an existing note.
-| Action | Command |
-|---|---|
-| Add a Tag | note tag add 5 urgent |
-| Remove a Tag | note tag remove 5 bash |
-6. Deleting a Note (delete)
-Permanently removes a note after asking for confirmation.
-| Action | Command |
-|---|---|
-| Delete Note | note delete 2 |
+# 2. List all notes
+$ note list
+--- LOCAL TERMUX NOTES ---
+ID: 1    | 2025-11-30 21:30 | Need to install Node.js and check the system path setup.
+
+# 3. Edit the note
+$ note edit 1 
+# nano opens... edit and save the file
+✅ Note ID 1 edited.
+
+# 4. View the full content
+$ note view 1 
+# Opens note in less for scrolling
+
 

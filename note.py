@@ -1,276 +1,190 @@
-#!/usr/bin/env python3
 import argparse
-import json
 import os
+import subprocess
 import sys
 from datetime import datetime
-import uuid
-import subprocess
 
-# --- Configuration & Paths ---
-DB_FILE = os.path.expanduser("~/.notes_db.json")
+# --- CONFIGURATION ---
+# Notes will be stored as individual text files in this folder.
+NOTES_DIR = os.path.expanduser("~/notes")
+PREVIEW_CHAR_LIMIT = 80  # Increased from 50
+# ---------------------
 
-# Colors (Adjust these if not running in Termux/Zsh)
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-RESET='\033[0m'
-
-# --- Database Handling ---
-def load_db():
-    if not os.path.exists(DB_FILE):
-        return []
+def get_next_id():
+    """Finds the next available sequential ID based on existing files."""
     try:
-        with open(DB_FILE, 'r') as f:
-            return json.load(f)
-    except json.JSONDecodeError:
-        print(f"{RED}Warning: Database file is corrupted. Starting with an empty list.{RESET}")
-        return []
-    except Exception as e:
-        print(f"{RED}Unexpected error loading DB: {e}{RESET}")
-        return []
-
-def save_db(data):
-    with open(DB_FILE, 'w') as f:
-        json.dump(data, f, indent=4)
-
-# --- Helper Functions ---
-def print_note(note, full_content=False):
-    tags_str = f" ({', '.join(note.get('tags', []))})" if note.get('tags') else ""
-    print(f"[{note['id']}] {BOLD}{note['title']}{RESET} {YELLOW}{tags_str}{RESET}")
-    print(f"  {CYAN}Created:{RESET} {note['created_at']}")
+        if not os.path.exists(NOTES_DIR):
+            return 1
+            
+        existing_ids = []
+        for filename in os.listdir(NOTES_DIR):
+            if filename.endswith(".txt"):
+                try:
+                    # Filename is the ID (e.g., '5.txt' -> 5)
+                    existing_ids.append(int(os.path.splitext(filename)[0]))
+                except ValueError:
+                    # Ignore files that are not numbered notes
+                    continue
+        
+        # Return the next highest ID or 1 if no files exist
+        return max(existing_ids) + 1 if existing_ids else 1
     
-    if full_content:
-        print(f"\n{BOLD}--- Description ---{RESET}")
-        print(note['content'])
-        print("-" * 20)
-
-def generate_id(db):
-    if not db:
+    except Exception as e:
+        print(f"Error determining next ID: {e}", file=sys.stderr)
         return 1
-    # Find the maximum existing ID and increment it
-    return max(n['id'] for n in db) + 1
 
-# --- Command Functions ---
+def get_note_filepath(note_id):
+    """Returns the full path for a given note ID."""
+    return os.path.join(NOTES_DIR, f"{note_id}.txt")
 
 def add_note(args):
-    db = load_db()
+    """Adds a new note by creating a new file."""
+    if not os.path.exists(NOTES_DIR):
+        os.makedirs(NOTES_DIR)
+        
+    new_id = get_next_id()
+    filepath = get_note_filepath(new_id)
     
-    # Check for title and description input
-    if not args.title or not args.content:
-        print(f"{RED}Error: Title and description (-c) are required.{RESET}")
-        return
-
-    new_id = generate_id(db)
-    
-    new_note = {
-        'id': new_id,
-        'title': args.title,
-        'content': args.content,
-        'created_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        'tags': [tag.lower() for tag in args.tags] if args.tags else []
-    }
-    
-    db.append(new_note)
-    save_db(db)
-    print(f"✅ {GREEN}Note ID {new_id} ('{args.title}') added successfully.{RESET}")
-
-
-def list_notes(args):
-    db = load_db()
-    
-    if not db:
-        print("No notes found.")
-        return
-    
-    # Apply filtering if a tag is provided
-    if args.tag:
-        tag_query = args.tag.lower()
-        filtered_db = [
-            note for note in db
-            if tag_query in [t.lower() for t in note.get('tags', [])]
-        ]
-    else:
-        filtered_db = db
-
-    if not filtered_db:
-        tag_info = f" with tag '{args.tag}'" if args.tag else ""
-        print(f"{RED}No notes found{tag_info}.{RESET}")
-        return
-
-    tag_info = f" (Tag Filter: {args.tag})" if args.tag else ""
-    print(f"\n{BOLD}{CYAN}--- Notes Found ({len(filtered_db)}){tag_info} ---{RESET}")
-    for note in filtered_db:
-        print_note(note, full_content=False)
-        print("-" * 20)
-
-
-def view_note(args):
-    db = load_db()
     try:
-        note = next(n for n in db if n['id'] == args.id)
-        print_note(note, full_content=True)
-    except StopIteration:
-        print(f"{RED}Error: Note with ID {args.id} not found.{RESET}")
-
+        with open(filepath, 'w') as f:
+            f.write(args.content.strip())
+            f.write(f"\n\n# Created: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        print(f"✅ Note added successfully with ID: {new_id}")
+    except Exception as e:
+        print(f"Error saving note: {e}", file=sys.stderr)
 
 def edit_note(args):
-    db = load_db()
-    
-    try:
-        note = next(n for n in db if n['id'] == args.id)
-    except StopIteration:
-        print(f"{RED}Error: Note with ID {args.id} not found.{RESET}")
-        return
-        
-    editor = os.environ.get('EDITOR', 'nano') # Use nano as default editor
-    
-    # 1. Create a temporary file with the current content
-    temp_file_name = f"/tmp/note_edit_{note['id']}_{uuid.uuid4()}.txt"
-    try:
-        with open(temp_file_name, 'w') as f:
-            f.write(note['content'])
-        
-        # 2. Open the editor
-        subprocess.run([editor, temp_file_name])
-        
-        # 3. Read the modified content
-        with open(temp_file_name, 'r') as f:
-            new_content = f.read().strip()
-            
-        # 4. Check if content changed
-        if new_content == note['content']:
-            print(f"{YELLOW}Note ID {args.id}: Content unchanged. Edit cancelled.{RESET}")
-            return
-            
-        # 5. Update the note in the database
-        note['content'] = new_content
-        save_db(db)
-        print(f"✅ {GREEN}Note ID {args.id} content updated successfully.{RESET}")
-        
-    finally:
-        # Clean up the temporary file
-        if os.path.exists(temp_file_name):
-            os.remove(temp_file_name)
+    """Opens an existing note file in the default editor (nano)."""
+    note_id = args.id
+    filepath = get_note_filepath(note_id)
 
+    if not os.path.exists(filepath):
+        print(f"Error: Note with ID '{note_id}' not found at {filepath}.", file=sys.stderr)
+        return
+
+    # Check if EDITOR environment variable is set, otherwise default to nano
+    editor = os.environ.get('EDITOR', 'nano')
+    
+    try:
+        # Open the editor directly on the note file
+        subprocess.run([editor, filepath], check=True)
+        print(f"✅ Note ID {note_id} edited.")
+    except subprocess.CalledProcessError:
+        print("Editor failed or was closed improperly.", file=sys.stderr)
+    except Exception as e:
+        print(f"An error occurred during editing: {e}", file=sys.stderr)
+
+# --- NEW FUNCTION FOR VIEWING ---
+def view_note(args):
+    """Views the full content of a note using a pager (like less)."""
+    note_id = args.id
+    filepath = get_note_filepath(note_id)
+
+    if not os.path.exists(filepath):
+        print(f"Error: Note with ID '{note_id}' not found.", file=sys.stderr)
+        return
+
+    # Use 'less' as the default pager for viewing long content
+    pager = os.environ.get('PAGER', 'less')
+    
+    try:
+        # Pass the file directly to the pager for easy scrolling
+        subprocess.run([pager, filepath], check=True)
+    except Exception as e:
+        print(f"Error viewing note: {e}", file=sys.stderr)
+# --------------------------------
+
+def list_notes(args):
+    """Lists all notes with their IDs and content previews."""
+    if not os.path.exists(NOTES_DIR):
+        print("No notes directory found. Use 'note add' to start.")
+        return
+
+    print("\n--- LOCAL TERMUX NOTES ---")
+    found = False
+    
+    for filename in sorted(os.listdir(NOTES_DIR), key=lambda x: int(os.path.splitext(x)[0]) if os.path.splitext(x)[0].isdigit() else 0):
+        if filename.endswith(".txt"):
+            try:
+                note_id = os.path.splitext(filename)[0]
+                filepath = get_note_filepath(note_id)
+                
+                with open(filepath, 'r') as f:
+                    content = f.read()
+
+                # Get the modification time
+                mod_time = os.path.getmtime(filepath)
+                time_str = datetime.fromtimestamp(mod_time).strftime("%Y-%m-%d %H:%M")
+                
+                # Use the first line of content for the preview
+                first_line = content.split('\n')[0].strip()
+                preview = first_line[:PREVIEW_CHAR_LIMIT]
+                
+                if len(first_line) > PREVIEW_CHAR_LIMIT:
+                    preview += '...'
+                
+                print(f"ID: {note_id.ljust(4)} | {time_str} | {preview}")
+                found = True
+
+            except Exception as e:
+                print(f"Error processing file {filename}: {e}", file=sys.stderr)
+                
+    if not found:
+        print("No notes found. Use 'note add \"My first note\"' to start.")
+    else:
+        print("\nUse 'note view [id]' to see the full content.")
+    print("--------------------------")
 
 def delete_note(args):
-    db = load_db()
-    
-    try:
-        note = next(n for n in db if n['id'] == args.id)
-    except StopIteration:
-        print(f"{RED}Error: Note with ID {args.id} not found.{RESET}")
+    """Deletes a note file."""
+    note_id = args.id
+    filepath = get_note_filepath(note_id)
+
+    if not os.path.exists(filepath):
+        print(f"Error: Note with ID '{note_id}' not found.", file=sys.stderr)
         return
 
-    print(f"\n{YELLOW}--- CONFIRM DELETION ---{RESET}")
-    print(f"Are you sure you want to delete Note ID {note['id']} ('{note['title']}')?")
-    
-    confirm = input("Type 'yes' to confirm: ")
-    
-    if confirm.lower() == 'yes':
-        new_db = [n for n in db if n['id'] != args.id]
-        save_db(new_db)
-        print(f"✅ {GREEN}Note ID {args.id} successfully DELETED.{RESET}")
-    else:
-        print(f"{CYAN}Deletion cancelled.{RESET}")
-
-
-def tag_management(args):
-    db = load_db()
-    
     try:
-        note = next(n for n in db if n['id'] == args.id)
-    except StopIteration:
-        print(f"{RED}Error: Note with ID {args.id} not found.{RESET}")
-        return
+        os.remove(filepath)
+        print(f"🗑️ Note ID {note_id} deleted successfully.")
+    except Exception as e:
+        print(f"Error deleting note file: {e}", file=sys.stderr)
 
-    current_tags = set(note.get('tags', []))
-    tag_name = args.tag.lower()
-    
-    if args.action == 'add':
-        if tag_name in current_tags:
-            print(f"{YELLOW}Tag '{tag_name}' already exists on Note ID {args.id}.{RESET}")
-            return
-        
-        current_tags.add(tag_name)
-        note['tags'] = sorted(list(current_tags))
-        save_db(db)
-        print(f"✅ {GREEN}Tag '{tag_name}' added to Note ID {args.id}.{RESET}")
-        
-    elif args.action == 'remove':
-        if tag_name not in current_tags:
-            print(f"{YELLOW}Tag '{tag_name}' not found on Note ID {args.id}.{RESET}")
-            return
-        
-        current_tags.remove(tag_name)
-        note['tags'] = sorted(list(current_tags))
-        save_db(db)
-        print(f"✅ {GREEN}Tag '{tag_name}' removed from Note ID {args.id}.{RESET}")
-
-
-# --- Main Logic ---
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Simple Note Taking App",
-        epilog="Usage: note.py add 'Title' -c 'Description' -t tag1 tag2"
-    )
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    parser = argparse.ArgumentParser(description="Termux Note Management CLI (Local File Storage).")
+    
+    # Subparsers for commands (add, list, edit, delete, view)
+    subparsers = parser.add_subparsers(dest='command', required=True)
 
-    # 'add' command (Title, Description, Tags, Creation Date handled internally)
-    parser_add = subparsers.add_parser("add", help="Add a new note")
-    parser_add.add_argument("title", type=str, help="Title of the note")
-    parser_add.add_argument("-c", "--content", required=True, type=str, help="Description/Content of the note")
-    parser_add.add_argument("-t", "--tags", nargs='*', type=str, help="Optional tags for organization")
+    # --- Add Command ---
+    parser_add = subparsers.add_parser('add', help='Add a new note.')
+    parser_add.add_argument('content', type=str, help='The content of the new note.')
     parser_add.set_defaults(func=add_note)
 
-    # 'list' command (with optional tag filter)
-    parser_list = subparsers.add_parser("list", help="List all notes (IDs, Titles, Creation Date)")
-    parser_list.add_argument("-t", "--tag", type=str, help="Filter notes by a specific tag", default=None)
-    parser_list.set_defaults(func=list_notes)
-
-    # 'view' command
-    parser_view = subparsers.add_parser("view", help="View a single note's full description")
-    parser_view.add_argument("id", type=int, help="ID of the note to view")
+    # --- Edit Command ---
+    parser_edit = subparsers.add_parser('edit', help='Edit an existing note by ID.')
+    parser_edit.add_argument('id', type=int, help='The ID of the note to edit.')
+    parser_edit.set_defaults(func=edit_note)
+    
+    # --- View Command (New) ---
+    parser_view = subparsers.add_parser('view', help='View the full content of a note by ID using a pager.')
+    parser_view.add_argument('id', type=int, help='The ID of the note to view.')
     parser_view.set_defaults(func=view_note)
 
-    # 'edit' command
-    parser_edit = subparsers.add_parser("edit", help="Edit a note's content using $EDITOR")
-    parser_edit.add_argument("id", type=int, help="ID of the note to edit")
-    parser_edit.set_defaults(func=edit_note)
-
-    # 'delete' command
-    parser_delete = subparsers.add_parser("delete", help="Delete a note by ID")
-    parser_delete.add_argument("id", type=int, help="ID of the note to delete")
+    # --- List Command ---
+    parser_list = subparsers.add_parser('list', help='List all notes.')
+    parser_list.set_defaults(func=list_notes)
+    
+    # --- Delete Command ---
+    parser_delete = subparsers.add_parser('delete', help='Delete an existing note by ID.')
+    parser_delete.add_argument('id', type=int, help='The ID of the note to delete.')
     parser_delete.set_defaults(func=delete_note)
 
-    # 'tag' parent command
-    parser_tag = subparsers.add_parser("tag", help="Manage tags on a note")
-    tag_subparsers = parser_tag.add_subparsers(dest="action", required=True)
 
-    # 'tag add' command
-    parser_tag_add = tag_subparsers.add_parser("add", help="Add a tag to a note")
-    parser_tag_add.add_argument("id", type=int, help="ID of the note")
-    parser_tag_add.add_argument("tag", type=str, help="Tag name to add")
-    parser_tag_add.set_defaults(func=tag_management)
-
-    # 'tag remove' command
-    parser_tag_remove = tag_subparsers.add_parser("remove", help="Remove a tag from a note")
-    parser_tag_remove.add_argument("id", type=int, help="ID of the note")
-    parser_tag_remove.add_argument("tag", type=str, help="Tag name to remove")
-    parser_tag_remove.set_defaults(func=tag_management)
-
-    # Parse arguments and call function defined by set_defaults
     args = parser.parse_args()
-
-    if hasattr(args, 'func'):
-        args.func(args)
-    else:
-        parser.print_help()
+    args.func(args)
 
 if __name__ == '__main__':
     main()
-
