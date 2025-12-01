@@ -3,15 +3,21 @@ import os
 import sqlite3
 import json
 import shutil
-import subprocess
+import sys 
 from datetime import datetime
-VERSION= "1.1.1"
+VERSION= "1.3.1" #<<-- Fixed daily and recurring expenses display and data pulling from Budget Buddy(expense manager)
 
 # --- Configuration & Paths ---
-# Using the paths you provided earlier
 BUDGET_DB = os.path.expanduser("~/Budget-Buddy-TUI/expenses.db")
 TASKS_JSON = os.path.expanduser("~/rich-task-manager-tui/tasks.json")
 NOTES_DB_FILE = os.path.expanduser("~/.notes_db.json")
+
+# --- FINAL CONFIRMED CONFIGURATION ---
+# Both totals now rely on the 'transactions' table
+EXPENSE_TABLE_NAME = "transactions" 
+EXPENSE_DATE_COLUMN = "date"    
+RECURRING_FLAG = "Recurring payment:" # The unique string used in the description
+# ---------------------------------------------
 
 # Colors
 CYAN = '\033[96m'
@@ -29,9 +35,12 @@ def get_greeting():
 
 def get_system_stats():
     # Get disk usage for the home directory
-    total, used, free = shutil.disk_usage(os.path.expanduser("~"))
-    free_gb = free // (2**30)
-    return f"{free_gb} GB Free"
+    try:
+        total, used, free = shutil.disk_usage(os.path.expanduser("~"))
+        free_gb = free // (2**30)
+        return f"{free_gb} GB Free"
+    except Exception:
+        return "N/A"
 
 def get_pending_tasks():
     if not os.path.exists(TASKS_JSON):
@@ -40,65 +49,139 @@ def get_pending_tasks():
     try:
         with open(TASKS_JSON, 'r') as f:
             tasks = json.load(f)
-            # Assuming tasks have a 'status' or 'completed' field. 
-            # Adjusting logic to count items that are NOT done.
             pending = 0
             for task in tasks:
-                # Check for common status keys (adjust based on your actual JSON structure)
                 is_done = task.get('completed', False) or task.get('status') == 'done'
                 if not is_done:
                     pending += 1
-            return f"{YELLOW}{pending} Tasks Pending{RESET}"
+            return f"{YELLOW}{pending} Pending{RESET}"
     except Exception:
         return f"{RED}Error reading tasks{RESET}"
 
 def get_todays_spending():
+    """
+    Calculates the total discretionary (one-off) spending for today.
+    Uses the confirmed 'YYYY-MM-DD' date format.
+    """
     if not os.path.exists(BUDGET_DB):
-        return f"{RED}Budget DB not found{RESET}"
+        return 0.0, None 
     
+    conn = None
     try:
         conn = sqlite3.connect(BUDGET_DB)
         cursor = conn.cursor()
+        
+        # Confirmed date format is YYYY-MM-DD
         today = datetime.now().strftime("%Y-%m-%d")
         
-        # QUERY: Sum amounts where date is today
-        # NOTE: This assumes your table is named 'expenses' and has 'amount' and 'date' columns.
-        # If your DB schema is different, this query might need tweaking.
-        cursor.execute("SELECT SUM(amount) FROM expenses WHERE date LIKE ?", (f"{today}%",))
-        result = cursor.fetchone()[0]
-        conn.close()
+        # Query: Sum all amounts for today, excluding transactions that are flagged as recurring payments 
+        # (to show only today's *new* spending)
+        query = f"""
+        SELECT SUM(amount) FROM {EXPENSE_TABLE_NAME} 
+        WHERE {EXPENSE_DATE_COLUMN} LIKE ? 
+          AND description NOT LIKE ?
+        """
+        search_term = f"{today}%"
         
-        spent = result if result else 0.0
-        return f"{RED}£{spent:.2f} Spent Today{RESET}"
-    except Exception as e:
-        return f"{RED}DB Error (Check Schema){RESET}"
+        # The NOT LIKE is used to exclude the recurring items from the daily total
+        cursor.execute(query, (search_term, f"%{RECURRING_FLAG}%"))
+        
+        result = cursor.fetchone()[0]
+        # Only include expenses (positive amounts) if Budget Buddy stores income as negative, or vice versa.
+        # Assuming all transactions are stored as positive amounts for simplicity for now.
+        spent = result if result is not None else 0.0
+        
+        return spent, None 
+    
+    except sqlite3.OperationalError:
+        return 0.0, f"{RED}DB ERROR: Daily spending schema error.{RESET}"
+    except Exception:
+        return 0.0, f"{RED}Error reading daily spending{RESET}"
+        
+    finally:
+        if conn:
+            conn.close()
+
+def get_recurring_budget():
+    """
+    Calculates the total value of all transactions that are flagged as recurring payments.
+    NOTE: This is the historical total of applied recurring payments, not a separate template total.
+    """
+    if not os.path.exists(BUDGET_DB):
+        return 0.0, None
+
+    conn = None 
+    try:
+        conn = sqlite3.connect(BUDGET_DB)
+        cursor = conn.cursor()
+        
+        # The key fix: Query the 'transactions' table and filter by the description field.
+        query = f"""
+        SELECT SUM(amount) FROM {EXPENSE_TABLE_NAME} 
+        WHERE description LIKE ?
+        """
+        
+        # Use LIKE with wildcards to find "Recurring payment: XXXX"
+        cursor.execute(query, (f"%{RECURRING_FLAG}%",))
+        
+        result = cursor.fetchone()[0]
+        total_recurring = result if result is not None else 0.0
+        
+        return total_recurring, None
+        
+    except sqlite3.OperationalError as e:
+        # This will catch errors if the 'transactions' table is still problematic
+        return 0.0, f"{RED}Recurring DB Error (Transactions Table): {e}{RESET}"
+    except Exception:
+        return 0.0, f"{RED}Error reading recurring budget{RESET}"
+        
+    finally:
+        if conn:
+            conn.close()
+
+def get_budget_status():
+    """Combines and formats the output for both daily spending and recurring budget."""
+    
+    # NOTE: Daily spending now EXCLUDES recurring payments, 
+    # as recurring total includes them separately.
+    daily_spent, daily_error = get_todays_spending() 
+    recurring_total, recurring_error = get_recurring_budget()
+
+    if not os.path.exists(BUDGET_DB):
+        return f"{RED}Budget DB not found{RESET}"
+
+    if daily_error:
+        return daily_error 
+    if recurring_error:
+        return recurring_error
+
+    daily_str = f"£{daily_spent:.2f} Today"
+    recurring_str = f"£{recurring_total:.2f} Total Recurring"
+    
+    return f"{RED}{daily_str}{RESET} | {GREEN}{recurring_str}{RESET}"
+
 
 def get_note_stats():
     """
-    Reads the notes database and returns summary statistics.
+    Reads the notes database and returns summary statistics for the dashboard line.
+    (Function remains unchanged)
     """
     try:
         if not os.path.exists(NOTES_DB_FILE):
-            return 0, 0, "N/A"
+            return f"(0, 0, 'N/A'){RESET}"
 
         with open(NOTES_DB_FILE, 'r') as f:
             notes = json.load(f)
         
-        if not notes:
-            return 0, 0, "N/A"
-
         total_notes = len(notes)
         all_tags = set()
         
-        # Sort notes by creation date (latest first)
-        # Assuming created_at is a string sortable by time (e.g., YYYY-MM-DD HH:MM:SS)
         notes_sorted = sorted(notes, 
                               key=lambda x: x.get('created_at', '1900-01-01'), 
                               reverse=True)
         
-        most_recent_title = notes_sorted[0].get('title', 'Untitled')
+        most_recent_title = notes_sorted[0].get('title', 'Untitled') if notes_sorted else 'N/A'
 
-        # Collect all tags
         for note in notes:
             if 'tags' in note and note['tags']:
                 for tag in note['tags']:
@@ -106,38 +189,14 @@ def get_note_stats():
 
         unique_tags = len(all_tags)
         
-        return total_notes, unique_tags, most_recent_title
+        return f"({total_notes}, {unique_tags}, '{most_recent_title}')"
 
     except json.JSONDecodeError:
         print(f"{RED}Warning: Notes database is corrupted.{RESET}", file=sys.stderr)
-        return 0, 0, "Corrupted DB"
-    except Exception as e:
-        # print(f"{RED}Error reading notes database: {e}{RESET}", file=sys.stderr)
-        return 0, 0, "Error"
+        return f"({RED}0, 0, 'Corrupted DB'{RESET})"
+    except Exception:
+        return f"({RED}Error{RESET})"
         
-def display_note_summary(width):
-    """
-    Displays a summary of the notes database.
-    """
-    total_notes, unique_tags, most_recent = get_note_stats()
-    
-    # Define the panel structure
-    lines = [
-        f"{BOLD}{CYAN}NOTES SUMMARY:{RESET}",
-        f"{YELLOW}Total Notes:{RESET} {total_notes}",
-        f"{YELLOW}Unique Tags:{RESET} {unique_tags}",
-        f"{YELLOW}Most Recent:{RESET} {most_recent}"
-    ]
-    
-    # Calculate padding and print the panel
-    box_width = len(max(lines, key=len)) + 4  # +4 for padding
-
-    print(f"\n{BOLD}{CYAN}╭{'─' * (box_width - 2)}╮{RESET}")
-    for line in lines:
-        padding_right = box_width - len(line) - 3
-        print(f"{CYAN}│{RESET} {line}{' ' * padding_right}{CYAN}│{RESET}")
-    print(f"{BOLD}{CYAN}╰{'─' * (box_width - 2)}╯{RESET}")
-    
 def main():
     os.system('clear')
     
@@ -145,7 +204,7 @@ def main():
     
     # Header
     greeting = get_greeting()
-    user = os.environ.get('USER', 'Lukas')
+    user = os.environ.get('USER', 'Lukas') 
     date_str = datetime.now().strftime("%A, %d %B %Y")
     
     print(f"{BOLD}{CYAN}┌──────────────────────────────────────────────┐{RESET}")
@@ -160,8 +219,9 @@ def main():
     print(f" -----------------")
     print(f" 💾 System:    {get_system_stats()}")
     print(f" 📝 Tasks:     {get_pending_tasks()}")
-    print(f" 📚 Notes:     {get_note_stats()}") # <-- NEW LINE ADDED HERE
-    print(f" 💸 Budget:    {get_todays_spending()}")
+    print(f" 📚 Notes:     {get_note_stats()}") 
+    # Calling the new combined status function
+    print(f" 💸 Budget:    {get_budget_status()}") 
     print("")
     print(f"{CYAN}Ready for command... ({RESET}v{VERSION}{CYAN}){RESET}")
     print("")
@@ -169,4 +229,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
